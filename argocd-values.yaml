@@ -1,0 +1,15 @@
+ignoreHelmHooks: true
+operator: []
+namespaces:
+  - chirang-ci-cd
+argocd_cr:
+  initialRepositories: |
+    - url: https://gitlab-ce.apps.ocp4.example.com/chirang/tech-exercise.git
+      type: git
+      passwordSecret:
+        key: password
+        name: git-auth
+      usernameSecret:
+        key: username
+        name: git-auth
+      insecure: true

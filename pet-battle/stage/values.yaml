@@ -1,0 +1,34 @@
+release: "stage"
+source: "http://nexus:8081/repository/helm-charts/"
+##############
+# Argo Apps declaration
+#############
+applications:
+  keycloak:
+    name: keycloak
+    enabled: true
+    source: https://github.com/petbattle/pet-battle-infra
+    source_ref: labs1.0.1
+    source_path: keycloak
+    values:
+      app_domain: apps.ocp4.example.com
+  pet-battle-api:
+    name: pet-battle-api
+    enabled: true
+    source: http://nexus:8081/repository/helm-charts
+    chart_name: pet-battle-api
+    source_ref: 1.2.1
+    values:
+      image_name: pet-battle-api
+      image_version: latest
+      hpa:
+        enabled: false
+  pet-battle:
+    name: pet-battle
+    enabled: true
+    source: http://nexus:8081/repository/helm-charts
+    chart_name: pet-battle
+    source_ref: 1.0.6
+    values:
+      image_version: latest
+      config_map: '{ "catsUrl": "https://pet-battle-api-chirang-stage.apps.ocp4.example.com", "tournamentsUrl": "https://pet-battle-tournament-chirang-stage.apps.ocp4.example.com", "matomoUrl": "https://matomo-chirang-ci-cd.apps.ocp4.example.com/", "keycloak": { "url": "https://keycloak-chirang-stage.apps.ocp4.example.com/auth/", "realm": "pbrealm", "clientId": "pbclient", "redirectUri": "http://localhost:4200/tournament", "enableLogging": true } }'

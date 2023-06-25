@@ -1,0 +1,167 @@
+applications:
+  # Bootstrap Project
+  - name: bootstrap
+    enabled: true
+    source: https://redhat-cop.github.io/helm-charts
+    chart_name: bootstrap-project
+    source_ref: "1.0.1"
+    values:
+      serviceaccounts: ""
+      # student is the GROUP NAME in IDM
+      bindings: &binds
+        - name: student
+          kind: Group
+          role: admin
+        - name: jenkins
+          kind: ServiceAccount
+          role: admin
+          namespace: chirang-ci-cd
+      namespaces:
+        - name: chirang-ci-cd
+          bindings: *binds
+          operatorgroup: true
+        - name: chirang-dev
+          bindings: *binds
+          operatorgroup: true
+        - name: chirang-test
+          bindings: *binds
+          operatorgroup: true
+        - name: chirang-stage
+          bindings: *binds
+          operatorgroup: true
+  # Jenkins
+  - name: jenkins
+    enabled: true
+    source: https://github.com/redhat-cop/helm-charts.git
+    source_path: charts/jenkins
+    source_ref: "jenkins-1.0.6"
+    values:
+      buildconfigs:
+        # Jenkins S2I from Red Hat Labs
+        - name: jenkins
+          strategy_type: "Source"
+          source_repo: https://github.com/rht-labs/s2i-config-jenkins.git
+          source_repo_ref: master
+          source_context_dir: '/'
+          builder_image_kind: "DockerImage"
+          builder_image_name: quay.io/openshift/origin-jenkins
+          builder_image_tag: "latest"
+        # Jenkins agents for running builds etc
+        # default names, versions, repo and paths set on the template
+        - name: jenkins-agent-npm
+        - name: jenkins-agent-mvn
+        - name: jenkins-agent-helm
+        - name: jenkins-agent-argocd
+        - name: jenkins-agent-zap
+        - name: jenkins-agent-cosign
+        - name: jenkins-agent-python 
+      deployment:
+        env_vars:
+          - name: GITLAB_DEFAULT_BRANCH
+            value: 'main'
+          - name: GITLAB_HOST
+            value: 'gitlab-ce.apps.ocp4.example.com'
+          - name: GITLAB_GROUP_NAME
+            value: 'chirang'
+          - name: GIT_SSL_NO_VERIFY
+            value: "true"
+          - name: JAVA_ARGS
+            value: '-Dorg.jenkinsci.plugins.gitclient.GitClient.untrustedSSL=true'
+          - name: BISCUITS
+            value: jaffa-cakes
+      persistence: false
+      source_secrets:
+        - name: nexus-password
+          username: admin
+          password: admin123
+  - name: nexus
+    enabled: true
+    source: https://redhat-cop.github.io/helm-charts
+    chart_name: sonatype-nexus
+    source_ref: 1.1.10
+    values:
+      includeRHRepositories: false
+      service:
+        name: nexus
+  - name: sealed-secrets
+    enabled: true
+    source: https://redhat-cop.github.io/helm-charts
+    chart_name: helper-sealed-secrets
+    source_ref: 1.0.3
+    values:
+      secrets:
+        - name: git-auth
+          type: kubernetes.io/basic-auth
+          annotations:
+            tekton.dev/git-0: https://gitlab-ce.apps.ocp4.example.com
+            sealedsecrets.bitnami.com/managed: "true"
+          labels:
+            credential.sync.jenkins.openshift.io: "true"
+          data:
+            username: AgBYoQ5VRBNXZ6fiVKMaIbzuFUJyolPkzPyRx0HckVWr6VIjp3IcSUXY6xT5GSDO9ucZjW9YmSRHlnkdDD7GOYllIl6/rizXn9i5bMlsQrNddtu2oKLs9SQAvHlQP8i5zcS6cUfH2jzHMiF0Ndr6rTOA6vwLCKKJMXcqYZT+HrEVsNEIE806rU6eb7BH6CMWaZBEH9idPANn8P/CrS40rKP+7VG3TwqF913DVfZjzf9sjC+bsyLYrea6CbmpVIKWyn66cupw68E7dGmBKDX2bs+X36m5NOR033bTzi6w0h4f1ypHkQnS4xebAYw3S95wRKCXk8lypnnJ97KfYbfd/Zn98P3kMtq/Ji8zCh+PVM0/Wre3cB/VbE2dzzHvJKobzvgYhBVpjRPwLOAmkEPfK2uNe7q80Dnk6qrrM6Hvk73R+qh8gudidglOh4ExAI6a4zL7gRujX8a9wO7J30I53o7B9oM12BTB70Gl5Ip4fmRGgwEwsil3CTWBFwAWyhr4UswQWv3lj/zk6C5+nZeJKv0yzHpmTI7ZV8XytnHkDy+aAo+S5c+UgLiYCEWtfN92645KDNCIiUI7SWfijSsxGpijg28iPGu4dC9TuuDE4BQrlNjIqvpv2AGJzqTHJYy+7HMzfqu4h4hQrxHMFd/JhLEf4kDzF560bVgLCH9Ban6nlDt/Ulmm9cXMEBsvrOmYCPRe+r6ynQ==
+            password: AgCsMaHjQnXq2Goj9Gup1q04Nk0xexws5F0prqEnFV2Dw442THp1hMIfR+qez022JGvU/9N4I1d6/Fx+AZ69TKUnWZZHWSGZ5G6DyrzOqGwjjiCQ03F71vhK1D+rM+5xpimIMy9eULscPqv/Q7orXcb/wnvhQVCp3KmwNt1Xr7JGxJRvYcWr//xpa+vSMCdI+FzdRu+1dgZq8X5va/z1A15+6tUMlbI301OaSQqJflPavEDJwlfqivJWNSWiKoTg64KC8Zt7BXHG2VSuQR6ST1N5zt6/u3vx0iK2/udnNoT5Rk3PoOhNkidm2MqdRZ0zmnZftsOvwqb3E5hIJQS/8w8SBcqVRjYaGl/65nbDbtzK0RxtMURkDfwIgzjugj2xBP86junNjjzyZHgUV0DV2St6Coz5RwwE4BcO5KS+deh0xh/ifHUJyWYJiO6zE3DiUwhS+7zlV2RqmMQqYfN+QG9f1M9anXz0h793WbKkJArl8/jxTyAz+gB7+211zClUVLc9ceFpJp7Zswo+hrwd/N3sOxr7vsGVoxzOqPpEMIH0+VevTwQRlOdnNK1Jw8+hXldDVpPxhGe7klk6NAww27LuN/uE8L9htvly7tjcHkxQEmzufHtQ9KZ6MAI7ekVxQfzsta1JL36emjhznrezgrZao1N+zHf1dnebt9Qo8HC516vEy7GSuUU/U7qR6mujJI9G300ZjQ023pT+eB+MGu8Zf+MFBw==
+        - name: sonarqube-auth
+          type: Opaque
+          labels:
+            credential.sync.jenkins.openshift.io: "true"
+          data:
+            currentAdminPassword: AgAO4THiP2F2zSRB3hL50n5AY3f8Q3X3kyxIB215C30HphqERSxfkMK06cGYTV6b5hiheRcWEw4Dsk1OpDa+eW6QC8mICe9//J+VVUPm9prAiffHg7oti4/e5SGdpgBqlJzh5xEwxr6hqRYXpw5BsHKH+v//jcvm28ubf8yswKwzQll4lkMyue6P5yGi2kcxd6c/7zPTDiNg6GQo85/fWIoddyNTeIDpHUabCJMJm4NK45NaDszbz4XMS8iqvVnNPt8UwTnrhKXebGdAi0nzNeSAnMvoiTQNOH5sP5Fzjwx28OKvrpeMuTG8nh8gQ8ff5nSgKyYK673CJyK1tdTe1n98ZpCUlvU1FcOdBV1aEtG+Qgx2NR+QwPO+EGIi6JarIfykE2FeIdNP54f2Mr7DyF1p3mCLJ/rB41CKJzeG08SFl0AI5376QJ+tdg1XroQFeRxdn1/tjMIMeFKlSt+FyWEzm97RY9n9nJ3HQ0WWHzLpntM/PvfTtBe+HcAFzBPOUyItnP9zUbQEfbQP8wjn5r1d7o9z5DALxqi1z/dHZv3nTEkoRiGClw9O3zshMEXBvXvrwJeMaVMGXYYuhoq7HFmU5s1sbLz7SAzwHQmPdz4lW4YPG8kvLBlHIQchJDIzx1WWbVDqelOdTaY2BNhj/DlBn1hY3NGu2Om8xXYza29Iy0DF9Vgf5DTrMQF8JKTIOaj8XjQlKA==
+            password: AgBM/AFqq1xi422HGhFAQi3uU08gSf/gDztifGgCXpP34G9sSNoOPtkZEed6IT3MVRaZ/JCnEye/JQnEhm0Htz+2luVQkIS911imCv6Z1aKXhjXNa/jDWdLXW/WqMAmskjXJ6xrEhoflql3Y2rCOwsmqmprW0JIrJPffq3eLsouglvlNQEWoG0uyrQAGJIuBmM06Q5+HLbhPkfOKiQzbEcTBsEfZ+4PAFP77bwVcX6HfgBqWSoc+Y9HrDY4qTI4UqqklhjbLrYbXWTfbUFDtsHLjlWNLJ8xusVZPaR78MzAbuH3w8wSnoNJ63yxngV/3Ro2+GL1ah3w9HsMG0H5QnM/DtSpUlBJQDSEpfV7aCSrTopYwVScV5rpPpYc+ZfVTpzeu0m/wNV28qNGegS0wWmzZ8TzCCj74JXxeriCjms9MZAsB3gBtAAErc2HSWT1AjUXbCo50mIlAx6+nbnpjfdVjE4fjcftWxSvxA6EG0pNOuQtgz0eg79NcORJEjnkzPMikEKnqqalgPCYFFL4AcrL9TWrxz8zex9rCbf5yXKiH+TGbDfE6h6c5e3+8hBYOHiCInV8qa77Rc5JhlRlFLBTJTpO0T3rvllVF+OO+K+kJFL4hJCtHypSSvqtg2fwVPGxJw5yRg6he2DVeftbaF2E6GENcBciJmjhlor4qtRrRTc3IZZrVmYSY8pzIo/3ER4r6aZPW83HPhA==
+            username: AgChbhdMojKwHrNCp7sDbxhYtpKvEetKUUkvJrtlAb0eOJkBcONnLF7EIRQHLjeiM74KK6yzp75xUfvLf6Rp0FaCW3kROKeAHzUOLwKAOrPZ26gNA0IdivxP22lh3GRuBnGLw2IzcAD+dWWyZQwN61D1306kNf85UKvN+r1qnVQ7WwFMWab5Uemw14UDc56YgKZlOjKe3DBEah5d9VqA5uA7rq30NCDCX+ImC1+01ZPt3uC/C0d5h+CxIXUqq1UdysBYUCGNSV6sB7+pImC7OnCkQlvhI9JuoLO+YLnMblUpGr+LFn79Bjq4WePQ5deZOlf+ydXS0piNsJIppJQwutR9E/9DR9mW7GJSk86x8Lyb4meB58ZvqAiM8AGhsCd/ZerXmNer7TnRVD8r9f5UdOMmmvV8kjkwZ4KjlFGde5e2asmN6f4ZKUB88Y2cXa950HZ/Hc2miA9C7JJ+PKB83nqBbmJqenYRW/YORwvq89AoXDYV2+6sRqomqVIxiokc+LcQJyefzJQ9bR8ZicowFG55tbo4LLmEkL+k7CmO07V4kr/cYXbMy+DL3qxLups9xM0C7JXD4kh4RYUUIiNoq6GLT7/F1qxcXtYnI9dum9MCfTqXXiNDxSl2gRfavoAGhWyA8xz5zuy/CUG4xMfPF9DLNGYg2YIbT9CRx6+auOnMVwDjYfZwBDQdA6VjIPtSOwje48kpbA==
+        - name: allure-auth
+          type: Opaque
+          data:
+            password: AgBytucc2dRWrDhybQkAYO/xFUJYgERULs8fM6tShD8yHWzyeuOAqAtHhG8b+WB9XMSgJ455f+lb3WUBYtJeSut3CGQvW9AT3xBUGAkeavU3clpTcOx3NmM3cKYiIVKFhILFncT7PYF4ivvA21ZQch1fC/YWFqNCm2xOK8jZRy77f5pF4O0AaSQ+STalB3/F4LC0YhDXKp6r4ZxaSSaN2Trq9gRskDzRWYwTs4q3ySX+uPhwrGzjogyBsgKk54gwOxw0isB7v9OjvKFubR+tc+OsVuS0+fPcw1zqZuYPMxW+CsJ2jM89jBLya/xAIOfa2SVj1G9XYkTdPfOmhnuRCdr5841jQtVkMRlrVYxo6mA1UBw41HTIv/vTmbd3xlgOc20mZbgBI6E2MTSdv1xhBWonwi9MVXACq0EOUka+ngrN3SGIOkT+WVR1KxR+S1CuBisEbBIXi+IzEkgcyQNdna01YWGg3IbejM9I/RDZtjFllzEYAPfClRC+F9z2FbF1SBw3Cj1v0Zwb+bnhvY0O7b4tdP7EbefY08UU5XuPCLnmR667HO6vPUwFCck9X7Pa1YTpkEIOyVJksWjhWamL2TutR8d2TbyvWo9hq3fF/zYkgAK9mZ1kKekFmcf4jn0DXWwNIr4Bwq8ZWAouetx+jI0flVUwSlgo8hwUokplHR2xaIoRKpuec/lp/tNbdpwcHFUJVyuJ4XoSIA==
+            username: AgBgpwBqMHbqnj2jM7TCthGAsvSOK+WkgKV1XeIq/1Ia+AbN7VF/1nFL+4JVdr7WyoP4lvfpqmXFvvMVs2j42oXR54aZ7Ecq24dbEzwrVcxlrXhPwhyw5uQC9KmDlXrkwlmafBde+bPqeOjces98ewy/ywfQ7aV0XvbbyDH3yXzQo9+Jg/oS/GC4bU1UJ8s+Pn7D94n+W8+RUuqghx/la/99YY4jfM6gYHiC57moMSNXehTZZg6QcrBtakwUPlLsbgCI34Pi0/BiiuUKv9auTrhGxxu40cvXDY29TWe4+18kniAIiOa3QZofDfAno2JZsZB8meKnVc3axE5gkrGcBADImesh8B3rXsnxQkv2Qj7P1wlzDrl2G/srqdLhsYLUbSMVfgsNjeDrjOHeiTeZX9uJyeA/5yZVl75NewHwHm0GMCyB2QW7JhsQqWu7rUjkO+SFmqCE0pa+xk1BCzerxpE14ROrjqNMgwc5bxT+TGzgMXFTDeP0/63LPP4GtkgxbEG01vxwwxE448NdCTeJy8gccb1b6Qf2jyI8g4e2i9keiTgZuwbR8BbyHPn2gDRii/VHkQV/iLOid9wfA6e4dQaETy7ZiXHagzhEB2/tbmw0ClFoH2kUDx0iSZJaKXluzgHHTyHgp8OJIAxwWDaUzkeUw9ksYGLaVYQOVQ4jhAR4AIcEbJqNFTPkRGV1kn95oosxyWxGHw==                                  
+        - name: rox-auth
+          type: kubernetes.io/basic-auth
+          labels:
+            credential.sync.jenkins.openshift.io: "true"
+          data:
+            password: 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
+            username: AgAfXqrGkqzwBWbT3PX57l5L4M8N+ZWeM6SmTj1yIOMwSEa23OQWhd0u9ofYFdyf8eJ7/PE21pc25Q52qemgPzrELVRgi8PrZfbdI1mwdkes66j9MobEq2osMNO01Qf+8/dmk/YR9QVgU7XZsrXZoBv0SAKwX/agVl//5KWiV0BFvnY8shJ2F8oYbZhLm7ujTmn0ge+QoGbZCCmEORpm0yfMTlPmYa+sOYIREV55f1dtnY6B+3cn4vVayXDtNx/za7yCHorzI35icEqOA4Y9VhMmocFs4RIhWtYWKbtiXE7+BiEFGTcSlQmaL90wj22gejaXsCF0ZdSM0afikyTQE95Uy/KVVF6tCLPchaQDw++MFdGsmdeGTz8TboFyUlAPs+h1I8l6OiVk2+cGxp8I+GZccNlGK+6IQtWwqOi/fJgLBEWUl9b7nzIBAVOcFQu6X7aUBuvW7QdLfgJ8ce6Pkc7ScvqLZka87v1pt3hfQ/dR5jgs4rXsI7jlgN4qfFTeJsyt/85HnbMWRuCyc0m4bxe2hhos8yzf2PEyZ7o9gAgPvVhrZ1oDepxccHa4RA4buxju+KuwbW1zMUfEpUWOkS7ii9rBwOJFgmdszF7oFVOToy2ygwdj1Sp4LPqbilB7yIWLuTXd5nIVgCbKUMqAkkxSFb9b7X40hYeckNTeZiVDg6DOXu52K085HrC2LW66gJ2jr/DeVbGbbyZziKrb7h0HcD1HUSMGO97XeFG2sn244CjeDnoH3A==
+  - name: tekton-pipeline
+    enabled: true
+    source: https://gitlab-ce.apps.ocp4.example.com/chirang/tech-exercise.git
+    source_ref: main
+    source_path: tekton
+    values:
+      team: chirang
+      cluster_domain: apps.ocp4.example.com
+      git_server: gitlab-ce.apps.ocp4.example.com
+
+# Nexus
+
+# Sealed Secrets
+
+# Tekton Pipelines
+
+# Sonarqube
+  # Sonarqube
+  - name: sonarqube
+    enabled: true
+    source: https://redhat-cop.github.io/helm-charts
+    chart_name: sonarqube
+    source_ref: "0.1.0"
+    values:
+      account:
+        existingSecret: sonarqube-auth
+      initContainers: true
+      plugins:
+        install:
+          - https://github.com/checkstyle/sonar-checkstyle/releases/download/9.2/checkstyle-sonar-plugin-9.2.jar
+          - https://github.com/dependency-check/dependency-check-sonar-plugin/releases/download/2.0.8/sonar-dependency-check-plugin-2.0.8.jar
+# Grafana
+
+# Allure
+  # Allure
+  - name: allure
+    enabled: true
+    source: https://github.com/eformat/allure.git
+    source_path: "chart"
+    source_ref: "main"
+    values:
+      security:
+        secret: allure-auth
+
+# Matomo
